@@ -69,6 +69,14 @@ const WorkoutManager: React.FC<WorkoutManagerProps> = ({
   
   // Active Workout Session State
   const [activeSession, setActiveSession] = useState<ActiveSessionState | null>(null);
+  const [restDefault, setRestDefault] = useState<number>(() => {
+    try {
+      const raw = localStorage.getItem('fitgenius_rest_default');
+      return raw ? Number(raw) : 60;
+    } catch {
+      return 60;
+    }
+  });
   const [restTimer, setRestTimer] = useState(60);
   const [workTimer, setWorkTimer] = useState(0); 
   const [timerRunning, setTimerRunning] = useState(false);
@@ -116,7 +124,7 @@ const WorkoutManager: React.FC<WorkoutManagerProps> = ({
   // Timer Effect
   useEffect(() => {
     let interval: any = null;
-    
+
     if (activeSession && timerRunning) {
         if (activeSession.step === 'rest') {
             // Countdown for Rest
@@ -125,9 +133,15 @@ const WorkoutManager: React.FC<WorkoutManagerProps> = ({
                     setRestTimer((prev) => prev - 1);
                 }, 1000);
             } else {
+                // Rest finished -> beep/vibrate -> auto-advance
                 playBeep();
-                speak(lang === 'en' ? "Rest complete. Get ready." : "休息結束，準備開始");
+                try { navigator.vibrate?.(200); } catch {}
+                speak(lang === 'en' ? "Rest complete. Next." : "休息結束，下一組／下一個動作");
                 setTimerRunning(false);
+                // Allow state to settle then advance
+                setTimeout(() => {
+                  try { nextSessionStep(); } catch {}
+                }, 50);
             }
         } else if (activeSession.step === 'work') {
             // Count UP for Work
@@ -136,7 +150,7 @@ const WorkoutManager: React.FC<WorkoutManagerProps> = ({
             }, 1000);
         }
     }
-    
+
     return () => clearInterval(interval);
   }, [activeSession, timerRunning, restTimer]);
 
@@ -325,13 +339,13 @@ const WorkoutManager: React.FC<WorkoutManagerProps> = ({
           // Finish Set
           if (activeSession.currentSet < targetSets) {
                setActiveSession({ ...activeSession, step: 'rest' });
-               setRestTimer(60); 
+               setRestTimer(restDefault);
                setTimerRunning(true);
                speak(lang === 'en' ? "Rest" : "休息");
           } else {
               if (activeSession.exerciseIndex < totalExercises - 1) {
                   setActiveSession({ ...activeSession, step: 'rest' });
-                  setRestTimer(60); 
+                  setRestTimer(restDefault);
                   setTimerRunning(true);
                   speak(lang === 'en' ? "Rest. Next exercise coming up." : "休息。準備下一個動作");
               } else {
@@ -562,6 +576,16 @@ const WorkoutManager: React.FC<WorkoutManagerProps> = ({
                     <div className="flex gap-4">
                         <button onClick={() => setRestTimer(prev => prev + 10)} className="px-4 py-2 bg-white/10 rounded-lg text-sm font-semibold hover:bg-white/20">+10s</button>
                         <button onClick={() => setRestTimer(prev => Math.max(0, prev - 10))} className="px-4 py-2 bg-white/10 rounded-lg text-sm font-semibold hover:bg-white/20">-10s</button>
+                        <button
+                          onClick={() => {
+                            setRestDefault(restTimer);
+                            try { localStorage.setItem('fitgenius_rest_default', String(restTimer)); } catch {}
+                          }}
+                          className="px-4 py-2 bg-emerald-500/20 border border-emerald-400/30 rounded-lg text-sm font-semibold hover:bg-emerald-500/30"
+                          title={lang === 'en' ? 'Set current as default rest' : '將目前休息時間設為預設'}
+                        >
+                          {lang === 'en' ? 'Set Default' : '設為預設'}
+                        </button>
                     </div>
                 </div>
                 <div className="mb-8">
