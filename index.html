@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>FitGenius AI</title>
+    
+    <!-- PWA Configuration -->
+    <link rel="manifest" href="./assets/manifest-3JXdQJE6.json" />
+    <meta name="theme-color" content="#10b981" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="FitGenius" />
+    <link rel="apple-touch-icon" href="./assets/icon-192-BinCuwtA.png" />
+    
+    <!-- Tailwind CSS (Keep CDN for simplicity, or move to PostCSS in build) -->
+    <!-- For production build via Vite, it's better to let Vite handle CSS, 
+         but keeping CDN allows 'dev' mode to look okay quickly if styled locally. 
+         However, the 'package.json' includes tailwindcss, so we will generate it. 
+         For this hybrid setup, we will keep the CDN for the 'raw' file view but 
+         Vite will process styles if configured. -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'system-ui', 'sans-serif'],
+              mono: ['JetBrains Mono', 'monospace'],
+            },
+            animation: {
+              'fade-in': 'fadeIn 0.5s ease-out',
+              'fade-in-up': 'fadeInUp 0.5s ease-out',
+              'slide-up': 'slideUp 0.4s ease-out',
+              'bounce-in': 'bounceIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+              'wave': 'wave 2.5s infinite',
+            },
+            keyframes: {
+              fadeIn: {
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' },
+              },
+              fadeInUp: {
+                '0%': { opacity: '0', transform: 'translateY(10px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+              },
+              slideUp: {
+                '0%': { transform: 'translateY(100%)' },
+                '100%': { transform: 'translateY(0)' },
+              },
+              bounceIn: {
+                '0%': { opacity: '0', transform: 'scale(0.9)' },
+                '100%': { opacity: '1', transform: 'scale(1)' },
+              },
+              wave: {
+                '0%': { transform: 'rotate(0deg)' },
+                '10%': { transform: 'rotate(14deg)' },
+                '20%': { transform: 'rotate(-8deg)' },
+                '30%': { transform: 'rotate(14deg)' },
+                '40%': { transform: 'rotate(-4deg)' },
+                '50%': { transform: 'rotate(10deg)' },
+                '60%': { transform: 'rotate(0deg)' },
+                '100%': { transform: 'rotate(0deg)' },
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+      ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+      .dark ::-webkit-scrollbar-thumb { background: #475569; }
+      .safe-area-pb { padding-bottom: env(safe-area-inset-bottom); }
+    </style>
+
+<script type="importmap">
+{
+  "imports": {
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.9.6",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "recharts": "https://aistudiocdn.com/recharts@^3.5.1",
+    "vite": "https://aistudiocdn.com/vite@^7.2.6",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0"
+  }
+}
+</script>
+  <script type="module" crossorigin src="./assets/index-Dyt5MzPH.js"></script>
+</head>
+  <body class="bg-slate-50 text-slate-900 antialiased selection:bg-emerald-200 selection:text-emerald-900 transition-colors duration-300">
+    <div id="root"></div>
+    <!-- CRITICAL: This script tag connects the HTML to your React code -->
+  </body>
+</html>
