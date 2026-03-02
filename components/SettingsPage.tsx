@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { UserSettings, AIProvider } from '../types';
 import { User, Target, Ruler, Globe, Database, Download, Upload, Zap, Activity, HardDrive, Key, Cpu, ExternalLink, Moon, Sun } from 'lucide-react';
 import { t } from '../utils/translations';
-import { getAiUsage } from '../services/geminiService';
+import { getAiUsage, getLastModelUsed } from '../services/geminiService';
 
 interface SettingsPageProps {
   settings: UserSettings;
@@ -14,6 +14,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, onUpdate }) => {
   const [formData, setFormData] = useState(settings);
   const [saved, setSaved] = useState(false);
   const [stats, setStats] = useState({ requests: 0, cacheHits: 0, generatedPlans: 0 });
+  const [lastModel, setLastModel] = useState<{ provider?: AIProvider; model?: string; at?: number }>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const lang = settings.language || 'zh-TW';
@@ -21,6 +22,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, onUpdate }) => {
 
   useEffect(() => {
       setStats(getAiUsage());
+      setLastModel(getLastModelUsed());
   }, []);
 
   const handleChange = (field: keyof UserSettings, value: string | number) => {
@@ -269,6 +271,12 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, onUpdate }) => {
                      <div className="text-[10px] text-slate-400 font-medium">{txt.set_ai_generated}</div>
                  </div>
              </div>
+
+             {lastModel?.model && (
+               <div className="mt-3 text-[11px] text-slate-500 dark:text-slate-400 break-all">
+                 {txt.set_last_model}: <span className="font-mono">{lastModel.model}</span>
+               </div>
+             )}
         </div>
 
         {/* Profile Section */}

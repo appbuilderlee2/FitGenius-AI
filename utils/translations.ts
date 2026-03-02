@@ -169,6 +169,7 @@ export const t: any = {
     set_ai_requests: 'API 請求次數',
     set_ai_cache: '快取命中 (節省)',
     set_ai_generated: '已生成計畫',
+    set_last_model: '最近使用模型',
     
     // API Keys
     set_api_config: 'API 金鑰設定',
@@ -358,6 +359,7 @@ export const t: any = {
     set_ai_requests: 'Total Requests',
     set_ai_cache: 'Cache Hits (Saved)',
     set_ai_generated: 'Plans Generated',
+    set_last_model: 'Last model used',
 
     // API Keys
     set_api_config: 'API Configuration',

@@ -174,6 +174,9 @@ class UniversalChatSession {
                 }
 
                 // success
+                if (this.provider === 'openrouter') {
+                    setLastModelUsed('openrouter', m);
+                }
                 break;
             }
 
@@ -225,6 +228,7 @@ class UniversalChatSession {
 
 const CACHE_KEY = 'fitgenius_exercise_cache';
 const USAGE_KEY = 'fitgenius_ai_usage';
+const LAST_MODEL_KEY = 'fitgenius_last_model';
 
 // --- Configuration Helper ---
 const getProviderSettings = (): { provider: AIProvider, key: string, model?: string } => {
@@ -252,6 +256,23 @@ export const trackAiUsage = (metric: 'requests' | 'cacheHits' | 'generatedPlans'
         localStorage.setItem(USAGE_KEY, JSON.stringify(stats));
     } catch (e) {
         console.warn("Usage tracking failed", e);
+    }
+};
+
+export const setLastModelUsed = (provider: AIProvider, model: string) => {
+    try {
+        localStorage.setItem(LAST_MODEL_KEY, JSON.stringify({ provider, model, at: Date.now() }));
+    } catch {
+        // ignore
+    }
+};
+
+export const getLastModelUsed = (): { provider?: AIProvider; model?: string; at?: number } => {
+    try {
+        const raw = localStorage.getItem(LAST_MODEL_KEY);
+        return raw ? JSON.parse(raw) : {};
+    } catch {
+        return {};
     }
 };
 
@@ -499,6 +520,10 @@ export const generateStructuredWorkoutPlan = async (
           lastErr = new Error(data.error.message || 'Provider error');
           if (provider === 'openrouter') continue;
           throw lastErr;
+        }
+
+        if (provider === 'openrouter') {
+          setLastModelUsed('openrouter', m);
         }
 
         break;
