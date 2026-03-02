@@ -24,7 +24,8 @@ const App: React.FC = () => {
         language: 'zh-TW',
         theme: 'light',
         activeProvider: 'gemini',
-        apiKeys: { gemini: '', openai: '', grok: '', deepseek: '' }
+        apiKeys: { gemini: '', openrouter: '', openai: '', grok: '', deepseek: '' },
+        openrouterModel: 'google/gemini-2.0-flash-exp:free'
     };
 
     if (saved) {

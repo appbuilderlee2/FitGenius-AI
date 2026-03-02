@@ -9,6 +9,8 @@ const getProviderConfig = (provider: AIProvider) => {
             return { url: 'https://api.x.ai/v1/chat/completions', model: 'grok-2-latest' };
         case 'deepseek':
             return { url: 'https://api.deepseek.com/chat/completions', model: 'deepseek-chat' };
+        case 'openrouter':
+            return { url: 'https://openrouter.ai/api/v1/chat/completions', model: 'google/gemini-2.0-flash-exp:free' };
         default: 
             return { url: 'https://api.openai.com/v1/chat/completions', model: 'gpt-4o-mini' };
     }
@@ -22,12 +24,14 @@ class UniversalChatSession {
     private provider: AIProvider;
     private apiKey: string;
     private language: string;
+    private openrouterModel?: string;
 
-    constructor(provider: AIProvider, apiKey: string, systemPrompt: string, language: string) {
+    constructor(provider: AIProvider, apiKey: string, systemPrompt: string, language: string, openrouterModel?: string) {
         this.provider = provider;
         this.apiKey = apiKey;
         this.systemPrompt = systemPrompt;
         this.language = language;
+        this.openrouterModel = openrouterModel;
     }
 
     async sendMessage(payload: { message: string }): Promise<any> {
@@ -42,7 +46,12 @@ class UniversalChatSession {
              throw new Error("Direct Gemini SDK should be used for Gemini provider.");
         }
 
-        const { url: endpoint, model } = getProviderConfig(this.provider);
+        // OpenRouter 允許用戶選 model（通常用 :free）
+        const providerConfig = getProviderConfig(this.provider);
+        const { url: endpoint } = providerConfig;
+        const model = (this.provider === 'openrouter' && this.openrouterModel)
+            ? this.openrouterModel
+            : providerConfig.model;
 
         // Prepare Tools (Plan Generation)
         const tools = [{
@@ -84,12 +93,20 @@ class UniversalChatSession {
         }];
 
         try {
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${this.apiKey}`
+            };
+
+            // OpenRouter 建議加上 Referer / Title 方便風控與統計
+            if (this.provider === 'openrouter') {
+                headers['HTTP-Referer'] = 'https://appbuilderlee2.github.io/FitGenius-AI/';
+                headers['X-Title'] = 'FitGenius-AI';
+            }
+
             const response = await fetch(endpoint, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.apiKey}`
-                },
+                headers,
                 body: JSON.stringify({
                     model: model,
                     messages: [
@@ -154,18 +171,19 @@ const CACHE_KEY = 'fitgenius_exercise_cache';
 const USAGE_KEY = 'fitgenius_ai_usage';
 
 // --- Configuration Helper ---
-const getProviderSettings = (): { provider: AIProvider, key: string } => {
+const getProviderSettings = (): { provider: AIProvider, key: string, model?: string } => {
     try {
         const settingsRaw = localStorage.getItem('fitgenius_settings');
-        if (!settingsRaw) return { provider: 'gemini', key: '' };
+        if (!settingsRaw) return { provider: 'gemini', key: '', model: undefined };
         
         const settings: UserSettings = JSON.parse(settingsRaw);
         const provider = settings.activeProvider || 'gemini';
         const key = settings.apiKeys?.[provider] || '';
+        const model = provider === 'openrouter' ? (settings.openrouterModel || 'google/gemini-2.0-flash-exp:free') : undefined;
         
-        return { provider, key };
+        return { provider, key, model };
     } catch {
-        return { provider: 'gemini', key: '' };
+        return { provider: 'gemini', key: '', model: undefined };
     }
 };
 
@@ -271,7 +289,7 @@ const getPlanTool = (language: string): FunctionDeclaration => ({
 // --- CHAT FACTORY ---
 export const createFitnessChat = (language: 'zh-TW' | 'en'): any => {
   trackAiUsage('requests');
-  const { provider, key } = getProviderSettings();
+  const { provider, key, model } = getProviderSettings();
   const langName = language === 'en' ? 'English' : 'Traditional Chinese (繁體中文)';
   
   const systemInstruction = `You are FitGenius, a highly motivating, energetic, and empathetic personal trainer.
@@ -299,8 +317,8 @@ export const createFitnessChat = (language: 'zh-TW' | 'en'): any => {
         },
       });
   } else {
-      // Return Universal Polyfill for OpenAI/Grok/DeepSeek
-      return new UniversalChatSession(provider, key, systemInstruction, language);
+      // Return Universal Polyfill for OpenAI/Grok/DeepSeek/OpenRouter
+      return new UniversalChatSession(provider, key, systemInstruction, language, model);
   }
 };
 
@@ -314,7 +332,7 @@ export const generateStructuredWorkoutPlan = async (
   language: 'zh-TW' | 'en'
 ): Promise<any> => {
   trackAiUsage('requests');
-  const { provider, key } = getProviderSettings();
+  const { provider, key, model } = getProviderSettings();
   
   if (!key) throw new Error("Missing API Key");
 
@@ -378,17 +396,28 @@ export const generateStructuredWorkoutPlan = async (
       const cleanText = cleanJsonString(response.text || '');
       return JSON.parse(cleanText || '{"days": []}');
   } else {
-      // OpenAI / Grok / DeepSeek
-      const { url: endpoint, model } = getProviderConfig(provider);
+      // OpenAI / Grok / DeepSeek / OpenRouter (OpenAI-compatible)
+      const providerConfig = getProviderConfig(provider);
+      const endpoint = providerConfig.url;
+      const selectedModel = provider === 'openrouter'
+        ? (model || providerConfig.model)
+        : providerConfig.model;
+
+      const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${key}`
+      };
+
+      if (provider === 'openrouter') {
+          headers['HTTP-Referer'] = 'https://appbuilderlee2.github.io/FitGenius-AI/';
+          headers['X-Title'] = 'FitGenius-AI';
+      }
 
       const res = await fetch(endpoint, {
           method: 'POST',
-          headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${key}`
-          },
+          headers,
           body: JSON.stringify({
-              model: model,
+              model: selectedModel,
               messages: [{ role: 'user', content: prompt }],
               response_format: { type: "json_object" }
           })

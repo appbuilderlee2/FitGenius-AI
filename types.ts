@@ -15,7 +15,7 @@ export interface WeightEntry {
   weight: number;
 }
 
-export type AIProvider = 'gemini' | 'openai' | 'grok' | 'deepseek';
+export type AIProvider = 'gemini' | 'openai' | 'grok' | 'deepseek' | 'openrouter';
 
 export interface UserSettings {
   name: string;
@@ -29,7 +29,11 @@ export interface UserSettings {
     openai?: string;
     grok?: string;
     deepseek?: string;
+    openrouter?: string;
   };
+
+  /** OpenRouter model id（建議用 :free） */
+  openrouterModel?: string;
 }
 
 export interface ChatMessage {

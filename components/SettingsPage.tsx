@@ -133,6 +133,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, onUpdate }) => {
                     className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none dark:text-white"
                 >
                     <option value="gemini">Google Gemini 2.5</option>
+                    <option value="openrouter">OpenRouter (Free Models)</option>
                     <option value="openai">OpenAI (ChatGPT 4o-mini)</option>
                     <option value="grok">xAI (Grok 2)</option>
                     <option value="deepseek">DeepSeek (V3/R1)</option>
@@ -156,6 +157,42 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, onUpdate }) => {
                     </div>
                 )}
                 {/* Other Providers Inputs same pattern */}
+                {formData.activeProvider === 'openrouter' && (
+                    <div className="animate-fade-in space-y-2">
+                        <div className="space-y-1">
+                          <label className="block text-xs font-bold text-slate-500 dark:text-slate-400">{txt.set_key_openrouter}</label>
+                          <input
+                              type="password"
+                              value={formData.apiKeys?.openrouter || ''}
+                              onChange={(e) => handleApiKeyChange('openrouter', e.target.value)}
+                              placeholder={txt.set_key_ph}
+                              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 focus:ring-2 focus:ring-emerald-500 text-sm dark:text-white"
+                          />
+                          <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[10px] text-blue-500 dark:text-blue-400 hover:underline">
+                              <ExternalLink size={10} /> {txt.set_get_openrouter}
+                          </a>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="block text-xs font-bold text-slate-500 dark:text-slate-400">{txt.set_openrouter_model}</label>
+                          <select
+                              value={formData.openrouterModel || 'google/gemini-2.0-flash-exp:free'}
+                              onChange={(e) => handleChange('openrouterModel' as any, e.target.value)}
+                              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none dark:text-white text-sm"
+                          >
+                              <option value="google/gemini-2.0-flash-exp:free">google/gemini-2.0-flash-exp:free</option>
+                              <option value="google/gemma-3-12b-it:free">google/gemma-3-12b-it:free</option>
+                              <option value="google/gemma-3-27b-it:free">google/gemma-3-27b-it:free</option>
+                              <option value="mistralai/mistral-small-3.1-24b-instruct:free">mistralai/mistral-small-3.1-24b-instruct:free</option>
+                              <option value="qwen/qwen3-coder:free">qwen/qwen3-coder:free</option>
+                          </select>
+                          <div className="text-[10px] text-slate-500 dark:text-slate-400 leading-snug">
+                            {txt.set_openrouter_tip}
+                          </div>
+                        </div>
+                    </div>
+                )}
+
                 {formData.activeProvider === 'openai' && (
                      <div className="animate-fade-in space-y-1">
                         <label className="block text-xs font-bold text-slate-500 dark:text-slate-400">{txt.set_key_openai}</label>
