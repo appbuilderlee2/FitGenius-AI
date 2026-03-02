@@ -80,6 +80,10 @@ const WorkoutManager: React.FC<WorkoutManagerProps> = ({
   const [restTimer, setRestTimer] = useState(60);
   const [workTimer, setWorkTimer] = useState(0); 
   const [timerRunning, setTimerRunning] = useState(false);
+
+  // Ready countdown (hands-free start)
+  const [readyTimer, setReadyTimer] = useState(3);
+  const [readyRunning, setReadyRunning] = useState(false);
   
   // Progressive Overload & PRs
   const [overloadSuggestion, setOverloadSuggestion] = useState<string | null>(null);
@@ -125,34 +129,60 @@ const WorkoutManager: React.FC<WorkoutManagerProps> = ({
   useEffect(() => {
     let interval: any = null;
 
-    if (activeSession && timerRunning) {
-        if (activeSession.step === 'rest') {
-            // Countdown for Rest
-            if (restTimer > 0) {
-                interval = setInterval(() => {
-                    setRestTimer((prev) => prev - 1);
-                }, 1000);
+    if (activeSession) {
+        if (activeSession.step === 'ready' && readyRunning) {
+            // Countdown for Ready
+            if (readyTimer > 0) {
+                interval = setInterval(() => setReadyTimer((p) => p - 1), 1000);
             } else {
-                // Rest finished -> beep/vibrate -> auto-advance
                 playBeep();
-                try { navigator.vibrate?.(200); } catch {}
-                speak(lang === 'en' ? "Rest complete. Next." : "休息結束，下一組／下一個動作");
-                setTimerRunning(false);
-                // Allow state to settle then advance
+                try { navigator.vibrate?.(80); } catch {}
+                setReadyRunning(false);
                 setTimeout(() => {
                   try { nextSessionStep(); } catch {}
                 }, 50);
             }
-        } else if (activeSession.step === 'work') {
-            // Count UP for Work
-            interval = setInterval(() => {
-                setWorkTimer((prev) => prev + 1);
-            }, 1000);
+        }
+
+        if (timerRunning) {
+            if (activeSession.step === 'rest') {
+                // Countdown for Rest
+                if (restTimer > 0) {
+                    interval = setInterval(() => {
+                        setRestTimer((prev) => prev - 1);
+                    }, 1000);
+                } else {
+                    // Rest finished -> beep/vibrate -> auto-advance
+                    playBeep();
+                    try { navigator.vibrate?.(200); } catch {}
+                    speak(lang === 'en' ? "Rest complete. Next." : "休息結束，下一組／下一個動作");
+                    setTimerRunning(false);
+                    // Allow state to settle then advance
+                    setTimeout(() => {
+                      try { nextSessionStep(); } catch {}
+                    }, 50);
+                }
+            } else if (activeSession.step === 'work') {
+                // Count UP for Work
+                interval = setInterval(() => {
+                    setWorkTimer((prev) => prev + 1);
+                }, 1000);
+            }
         }
     }
 
     return () => clearInterval(interval);
-  }, [activeSession, timerRunning, restTimer]);
+  }, [activeSession, timerRunning, restTimer, readyRunning, readyTimer]);
+
+  // When entering Ready step, auto start a short countdown (hands-free)
+  useEffect(() => {
+    if (activeSession?.step === 'ready') {
+      setReadyTimer(3);
+      setReadyRunning(true);
+    } else {
+      setReadyRunning(false);
+    }
+  }, [activeSession?.step, activeSession?.exerciseIndex, activeSession?.dayIndex]);
 
   // Progressive Overload Analysis
   useEffect(() => {
@@ -384,6 +414,25 @@ const WorkoutManager: React.FC<WorkoutManagerProps> = ({
       }
   };
 
+  const logCurrentSet = () => {
+    if (!activeSession || !selectedPlan) return;
+    const day = selectedPlan.days[activeSession.dayIndex];
+    const ex = day.exercises[activeSession.exerciseIndex];
+
+    const log: ExerciseLog = {
+      id: Date.now() + Math.random().toString(),
+      date: new Date().toISOString(),
+      timestamp: Date.now(),
+      exerciseName: ex.name,
+      sets: 1,
+      reps: parseInt(ex.reps) || 10,
+      weight: 0,
+      durationMinutes: Math.max(1, Math.round(workTimer / 60))
+    };
+    onAddLog(log);
+    speak(lang === 'en' ? 'Logged.' : '已記錄');
+  };
+
   const finishSession = (save: boolean) => {
       if (save && activeSession && selectedPlan) {
           const day = selectedPlan.days[activeSession.dayIndex];
@@ -404,6 +453,7 @@ const WorkoutManager: React.FC<WorkoutManagerProps> = ({
       }
       setActiveSession(null);
       setTimerRunning(false);
+      setReadyRunning(false);
   };
 
   const formatDate = (isoString: string) => {
@@ -419,6 +469,21 @@ const WorkoutManager: React.FC<WorkoutManagerProps> = ({
       const m = Math.floor(seconds / 60);
       const s = seconds % 60;
       return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
+
+  const getDayProgress = () => {
+    if (!activeSession || !selectedPlan) return { done: 0, total: 0, pct: 0 };
+    const day = selectedPlan.days[activeSession.dayIndex];
+    const setsPerExercise = day.exercises.map(ex => parseInt(ex.sets) || 3);
+    const totalSets = setsPerExercise.reduce((a,b) => a + b, 0);
+
+    // Done sets = all sets from previous exercises + (currentSet-1) if currently on work/rest, or currentSet-1 if ready
+    const prevSets = setsPerExercise.slice(0, activeSession.exerciseIndex).reduce((a,b) => a + b, 0);
+    const currentDone = Math.max(0, activeSession.currentSet - 1);
+    const doneSets = prevSets + currentDone;
+
+    const pct = totalSets > 0 ? Math.min(100, Math.round((doneSets / totalSets) * 100)) : 0;
+    return { done: doneSets, total: totalSets, pct };
   };
 
   const getWeeklyStreak = () => {
@@ -531,9 +596,22 @@ const WorkoutManager: React.FC<WorkoutManagerProps> = ({
     }
     
     if (activeSession.step === 'ready') {
+         const prog = getDayProgress();
          return (
-            <div className={`fixed inset-0 z-[60] flex flex-col p-8 animate-fade-in justify-center items-center ${bgBase}`}>
-                <p className="text-emerald-400 font-bold uppercase tracking-widest mb-4 animate-pulse">{txt.wo_get_ready}</p>
+            <div className={`fixed inset-0 z-[60] flex flex-col p-8 animate-fade-in justify-center items-center ${bgBase}`}> 
+                <div className="absolute top-4 left-4 right-4">
+                  <div className="flex items-center justify-between text-[11px] opacity-70">
+                    <span>{prog.done}/{prog.total}</span>
+                    <span>{prog.pct}%</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-white/10 overflow-hidden mt-2">
+                    <div className="h-full bg-emerald-500" style={{ width: `${prog.pct}%` }} />
+                  </div>
+                </div>
+                <p className="text-emerald-400 font-bold uppercase tracking-widest mb-2 animate-pulse">{txt.wo_get_ready}</p>
+                <div className="text-white/60 text-sm font-mono mb-4" onClick={() => setReadyRunning(!readyRunning)} title={lang === 'en' ? 'Tap to pause/resume countdown' : '點擊暫停/繼續倒數'}>
+                  {readyRunning ? (lang === 'en' ? 'Auto start in' : '自動開始倒數') : (lang === 'en' ? 'Paused' : '已暫停')} <span className="text-2xl font-black text-emerald-400">{readyTimer}</span>
+                </div>
                 <h2 className="text-4xl sm:text-5xl font-black text-center mb-6 leading-tight">{exercise.name}</h2>
                 <div className="flex gap-6 mb-8">
                      <div className="text-center">
@@ -615,13 +693,23 @@ const WorkoutManager: React.FC<WorkoutManagerProps> = ({
     }
     
     // Work Mode
+    const prog = getDayProgress();
     return (
         <div className={`fixed inset-0 z-[60] flex flex-col animate-fade-in ${userSettings.theme === 'dark' ? bgBase : 'bg-white text-slate-900'}`}>
-             <div className="flex justify-between items-center p-4">
-                <p className="text-xs font-bold opacity-50 uppercase tracking-wider">
-                    Ex {activeSession.exerciseIndex + 1}/{day.exercises.length} • Set {activeSession.currentSet}/{targetSets}
-                </p>
-                <button onClick={() => setActiveSession(null)} className="p-2 opacity-50 hover:opacity-100 rounded-full"><X size={20} /></button>
+             <div className="p-4 space-y-2">
+                <div className="flex justify-between items-center">
+                  <p className="text-xs font-bold opacity-50 uppercase tracking-wider">
+                      Ex {activeSession.exerciseIndex + 1}/{day.exercises.length} • Set {activeSession.currentSet}/{targetSets}
+                  </p>
+                  <button onClick={() => setActiveSession(null)} className="p-2 opacity-50 hover:opacity-100 rounded-full"><X size={20} /></button>
+                </div>
+                <div className="flex items-center justify-between text-[11px] opacity-60">
+                  <span>{prog.done}/{prog.total}</span>
+                  <span>{prog.pct}%</span>
+                </div>
+                <div className="h-2 rounded-full bg-slate-200/60 dark:bg-white/10 overflow-hidden">
+                  <div className="h-full bg-emerald-500" style={{ width: `${prog.pct}%` }} />
+                </div>
              </div>
              <div className="flex-1 flex flex-col items-center p-6 text-center overflow-y-auto">
                  <h2 className="text-3xl sm:text-4xl font-black mb-6 leading-tight">{exercise.name}</h2>
@@ -653,7 +741,10 @@ const WorkoutManager: React.FC<WorkoutManagerProps> = ({
                     {loadingExercise === exercise.name ? <Loader2 size={32} className="text-emerald-500 animate-spin" /> : <> <PlayCircle size={32} className="text-white opacity-80" /> <p className="absolute bottom-2 text-white text-[10px] opacity-70 uppercase font-bold tracking-wide">{txt.plan_view_guide}</p> </>}
                  </div>
              </div>
-             <div className="p-4 border-t border-slate-100 dark:border-slate-800">
+             <div className="p-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
+                 <button onClick={logCurrentSet} className="w-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 py-3 rounded-2xl font-bold text-base active:scale-95 transition-all flex items-center justify-center gap-2">
+                    <ClipboardList size={18} /> {lang === 'en' ? 'Log this set' : '記錄本組'}
+                 </button>
                  <button onClick={nextSessionStep} className="w-full bg-slate-900 dark:bg-emerald-600 text-white py-4 rounded-2xl font-bold text-xl shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3">
                     {activeSession.currentSet < targetSets ? <>{txt.wo_next} <Repeat size={24} /></> : <>{txt.wo_next} <ChevronRight size={24} /></>}
                  </button>
