@@ -16,6 +16,29 @@ const getProviderConfig = (provider: AIProvider) => {
     }
 };
 
+// OpenRouter free models fallback list
+const OPENROUTER_FREE_MODELS = [
+  'google/gemini-2.0-flash-exp:free',
+  'google/gemma-3-12b-it:free',
+  'google/gemma-3-27b-it:free',
+  'mistralai/mistral-small-3.1-24b-instruct:free',
+  'qwen/qwen3-coder:free'
+];
+
+const shouldRetryOpenRouter = (status: number) => {
+  // Typical transient / quota errors
+  return [408, 409, 425, 429, 500, 502, 503, 504].includes(status);
+};
+
+const normalizeOpenRouterErrorMessage = async (res: Response) => {
+  try {
+    const data = await res.json();
+    return data?.error?.message || JSON.stringify(data);
+  } catch {
+    try { return await res.text(); } catch { return 'Unknown error'; }
+  }
+};
+
 // --- Universal Chat Interface for Multi-Provider Support ---
 // This mimics the structure of the GoogleGenAI Chat object so components don't break.
 class UniversalChatSession {
@@ -104,25 +127,58 @@ class UniversalChatSession {
                 headers['X-Title'] = 'FitGenius-AI';
             }
 
-            const response = await fetch(endpoint, {
-                method: 'POST',
-                headers,
-                body: JSON.stringify({
-                    model: model,
-                    messages: [
-                        { role: 'system', content: this.systemPrompt },
-                        ...this.history
-                    ],
-                    tools: tools,
-                    tool_choice: "auto"
-                })
-            });
+            const requestBodyBase = {
+                messages: [
+                    { role: 'system', content: this.systemPrompt },
+                    ...this.history
+                ],
+                tools: tools,
+                tool_choice: "auto"
+            };
 
-            const data = await response.json();
-            
-            if (data.error) {
-                console.error("Provider Error:", data.error);
-                throw new Error(data.error.message);
+            // OpenRouter: auto fallback between free models on transient errors
+            const candidateModels = this.provider === 'openrouter'
+              ? Array.from(new Set([model, ...(OPENROUTER_FREE_MODELS.filter(m => m !== model))]))
+              : [model];
+
+            let lastErr: any = null;
+            let data: any = null;
+
+            for (const m of candidateModels) {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({
+                        model: m,
+                        ...requestBodyBase
+                    })
+                });
+
+                if (!response.ok) {
+                    const msg = await normalizeOpenRouterErrorMessage(response);
+                    lastErr = new Error(`${this.provider} HTTP ${response.status}: ${msg}`);
+                    if (this.provider === 'openrouter' && shouldRetryOpenRouter(response.status)) {
+                        continue; // try next model
+                    }
+                    throw lastErr;
+                }
+
+                data = await response.json();
+                if (data?.error) {
+                    lastErr = new Error(data.error.message || 'Provider error');
+                    // retry for OpenRouter only (treat as transient)
+                    if (this.provider === 'openrouter') {
+                        continue;
+                    }
+                    throw lastErr;
+                }
+
+                // success
+                break;
+            }
+
+            if (!data) {
+                throw lastErr || new Error('All models failed');
             }
 
             const choice = data.choices[0];
@@ -413,19 +469,43 @@ export const generateStructuredWorkoutPlan = async (
           headers['X-Title'] = 'FitGenius-AI';
       }
 
-      const res = await fetch(endpoint, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-              model: selectedModel,
-              messages: [{ role: 'user', content: prompt }],
-              response_format: { type: "json_object" }
-          })
-      });
-      
-      const data = await res.json();
-      if (data.error) throw new Error(data.error.message);
-      
+      const candidateModels = provider === 'openrouter'
+        ? Array.from(new Set([selectedModel, ...(OPENROUTER_FREE_MODELS.filter(m => m !== selectedModel))]))
+        : [selectedModel];
+
+      let lastErr: any = null;
+      let data: any = null;
+
+      for (const m of candidateModels) {
+        const res = await fetch(endpoint, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+                model: m,
+                messages: [{ role: 'user', content: prompt }],
+                response_format: { type: "json_object" }
+            })
+        });
+
+        if (!res.ok) {
+          const msg = await normalizeOpenRouterErrorMessage(res);
+          lastErr = new Error(`${provider} HTTP ${res.status}: ${msg}`);
+          if (provider === 'openrouter' && shouldRetryOpenRouter(res.status)) continue;
+          throw lastErr;
+        }
+
+        data = await res.json();
+        if (data?.error) {
+          lastErr = new Error(data.error.message || 'Provider error');
+          if (provider === 'openrouter') continue;
+          throw lastErr;
+        }
+
+        break;
+      }
+
+      if (!data) throw lastErr || new Error('All models failed');
+
       trackAiUsage('generatedPlans');
       const text = data.choices[0].message.content;
       return JSON.parse(text);
